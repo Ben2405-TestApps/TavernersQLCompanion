@@ -184,6 +184,43 @@ function A:GetDungeonQuests(dungeonName)
  end
  return out
 end
+function A:GetActiveRouteStops()
+ if not BindQuestDatabase() then return {},false end
+ local stops,seen={},{}
+ local function collect(db,id,questTitle,labelText)
+  local spawns=SafeGet(db,"spawns",id)
+  if type(spawns)~="table" then return end
+  for areaId,points in pairs(spawns) do
+   if type(points)=="table" then
+    for _,p in ipairs(points) do
+     if type(p)=="table" and tonumber(p[1]) and tonumber(p[2]) then
+      local x,y=tonumber(p[1]),tonumber(p[2])
+      local key=tostring(areaId)..":"..tostring(id)..":"..string.format("%.2f:%.2f",x,y)
+      if not seen[key] then
+       seen[key]=true
+       local zoneName
+       if C_Map and C_Map.GetAreaInfo then local ok,n=pcall(C_Map.GetAreaInfo,areaId); if ok then zoneName=n end end
+       stops[#stops+1]={areaId=tonumber(areaId) or 0,zone=zoneName or ("Area #"..tostring(areaId)),
+        x=x,y=y,quest=questTitle,objective=labelText}
+      end
+     end
+    end
+   end
+  end
+ end
+ for _,q in ipairs(self.active or {}) do
+  local data=SafeGet(QuestDB,"objectives",q.id) or {}
+  for _,row in ipairs(data[1] or {}) do collect(NpcDB,row[1],q.title,row[2] or "Creature objective") end
+  for _,row in ipairs(data[2] or {}) do collect(ObjectDB,row[1],q.title,row[2] or "Object objective") end
+  for _,row in ipairs(data[5] or {}) do collect(NpcDB,row[2],q.title,row[3] or "Kill-credit objective") end
+ end
+ table.sort(stops,function(a,b)
+  if a.areaId~=b.areaId then return a.areaId<b.areaId end
+  if a.x~=b.x then return a.x<b.x end
+  return a.y<b.y
+ end)
+ return stops,true
+end
 function A:GetDashboardSummary()
  local total=self.databaseCount or #self.questData
  local source=self.databaseBuilt and "Forever quest database" or "curated dungeon index"
@@ -229,6 +266,20 @@ local function refresh()
   end
   if #results==0 then add("No matching quests. Try a shorter name or objective keyword.") end
   if #results>=60 then add("Showing the first 60 matches. Refine the search to narrow the results.") end
+ elseif tab=="route" then
+  local stops,ready=A:GetActiveRouteStops()
+  add("ACTIVE QUEST OBJECTIVE ROUTE • "..#stops.." KNOWN SPAWN POINTS","GameFontNormal")
+  add("Stops are grouped by area and sorted by map coordinates. They are QuestieDB spawn hints, not a live GPS route; Questie remains responsible for map pins.")
+  if not ready then add("QuestieDB is not available. Install the Forever-compatible QuestieDB library to build objective locations.") end
+  local lastArea=nil
+  for i,stop in ipairs(stops) do
+   if i>50 then break end
+   if stop.areaId~=lastArea then add(stop.zone,"GameFontNormal"); lastArea=stop.areaId end
+   add(string.format("%02d. %.1f, %.1f — %s",i,stop.x,stop.y,stop.objective or "Objective"),"GameFontHighlight")
+   add("Quest: "..tostring(stop.quest),"GameFontHighlightSmall")
+  end
+  if #stops==0 and ready then add("No active quest objectives with known creature/object spawn coordinates were found. Check the All Quests tab for starter and objective details.") end
+  if #stops>50 then add("Showing first 50 locations. The full list may be larger.") end
  elseif tab=="dungeons" then
   add("DUNGEON QUEST REFERENCE • "..#A.questData.." curated records","GameFontNormal")
   local faction=UnitFactionGroup and UnitFactionGroup("player") or "Horde"
@@ -258,7 +309,7 @@ local function build()
   if searchBox then if k=="database" then searchBox:Show(); A:BuildDatabase() else searchBox:Hide() end end
   refresh()
  end) end
- btn("Active Quests",18,"quests"); btn("Leveling Zones",145,"zones"); btn("Dungeon Quests",272,"dungeons"); btn("All Quests",399,"database")
+ btn("Active Quests",18,"quests"); btn("Leveling Zones",145,"zones"); btn("Dungeon Quests",272,"dungeons"); btn("All Quests",399,"database"); btn("Quest Route",526,"route")
  searchBox=CreateFrame("EditBox","TavernersQLCSearch",frame,"InputBoxTemplate")
  searchBox:SetSize(260,24); searchBox:SetPoint("TOPLEFT",18,-78); searchBox:SetAutoFocus(false); searchBox:SetText(""); searchBox:Hide()
  searchBox:SetScript("OnTextChanged",function() if tab=="database" then refresh() end end)
