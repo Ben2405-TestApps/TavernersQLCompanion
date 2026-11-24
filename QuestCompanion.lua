@@ -4,6 +4,104 @@ if not Core then return end
 local Ref=ns and ns.QuestData or {}
 local DB=Core.Database:Register("TavernersQLCompanionDB",{version=2,zoneFavourites={},tracked={}},2)
 local A={db=DB,active={},zones=Ref.zones or {},questData=Ref.dungeonQuests or {}}
+local QuestDB, NpcDB, ObjectDB, ItemDB
+local searchBox, databaseReady=false,nil
+local questIndex, questById = {}, {}
+local function BindQuestDatabase()
+ local lib=_G.LibQuestieDB
+ if type(lib)~="table" or type(lib.Quest)~="table" then return false end
+ local qdb=lib.Quest
+ if type(qdb.GetAllIds)~="function" or type(qdb.name)~="function" then return false end
+ QuestDB=qdb; NpcDB=lib.Npc or _G.NpcDB; ObjectDB=lib.Object or _G.ObjectDB; ItemDB=lib.Item or _G.ItemDB
+ return true
+end
+local function SafeGet(db,field,id)
+ if db and type(db[field])=="function" then
+  local ok,value=pcall(db[field],id)
+  if ok then return value end
+ end
+end
+local function AddObjective(out,text)
+ if text and text~="" then out[#out+1]=tostring(text) end
+end
+local function BuildObjectiveLines(qid)
+ local out={}
+ local lines=SafeGet(QuestDB,"objectivesText",qid)
+ if type(lines)=="table" then for _,line in ipairs(lines) do AddObjective(out,line) end end
+ local data=SafeGet(QuestDB,"objectives",qid) or {}
+ local function entityName(db,id,fallback)
+  return SafeGet(db,"name",id) or fallback or ("ID "..tostring(id))
+ end
+ for _,row in ipairs(data[1] or {}) do
+  AddObjective(out,"Kill "..entityName(NpcDB,row[1]).." — "..tostring(row[3] or 0))
+ end
+ for _,row in ipairs(data[2] or {}) do
+  AddObjective(out,"Use / interact with "..entityName(ObjectDB,row[1]).." — "..tostring(row[3] or 0))
+ end
+ for _,row in ipairs(data[3] or {}) do
+  AddObjective(out,"Collect "..entityName(ItemDB,row[1]).." — "..tostring(row[3] or 0))
+ end
+ if data[4] then AddObjective(out,"Reputation objective — "..tostring(data[4][2] or "")) end
+ for _,row in ipairs(data[5] or {}) do
+  AddObjective(out,"Kill credit: "..entityName(NpcDB,row[2]).." — "..tostring(row[4] or 1))
+ end
+ for _,row in ipairs(data[6] or {}) do
+  AddObjective(out,"Cast spell objective — spell "..tostring(row[1] or 0))
+ end
+ for _,row in ipairs(SafeGet(QuestDB,"extraObjectives",qid) or {}) do
+  AddObjective(out,"Special: "..tostring(row[3] or "Hidden objective"))
+ end
+ return out
+end
+function A:BuildDatabase(force)
+ if self.databaseBuilt and not force then return true end
+ if not BindQuestDatabase() then self.databaseBuilt=false; return false end
+ local ok,ids=pcall(QuestDB.GetAllIds)
+ if not ok or type(ids)~="table" then self.databaseBuilt=false; return false end
+ local index,byId={},{}
+ for _,id in ipairs(ids) do
+  local name=SafeGet(QuestDB,"name",id)
+  if name and name~="" then
+   local row={
+    id=id,name=name,
+    requiredLevel=SafeGet(QuestDB,"requiredLevel",id) or 0,
+    questLevel=SafeGet(QuestDB,"questLevel",id) or 0,
+    zoneOrSort=SafeGet(QuestDB,"zoneOrSort",id) or 0,
+    objectiveText=SafeGet(QuestDB,"objectivesText",id) or {},
+    objectives=BuildObjectiveLines(id),
+    prerequisites=SafeGet(QuestDB,"preQuestSingle",id) or {},
+    groupedPrerequisites=SafeGet(QuestDB,"preQuestGroup",id) or {},
+    startedBy=SafeGet(QuestDB,"startedBy",id) or {},
+    finishedBy=SafeGet(QuestDB,"finishedBy",id) or {},
+   }
+   index[#index+1]=row; byId[id]=row
+  end
+ end
+ self.databaseBuilt=true; self.databaseCount=#index; self.database= index; self.databaseById=byId
+ questIndex=index; questById=byId; databaseReady=true
+ return true
+end
+function A:GetQuestById(id)
+ if not self.databaseBuilt then self:BuildDatabase() end
+ return self.databaseById and self.databaseById[tonumber(id)] or nil
+end
+function A:SearchDatabase(query,limit)
+ if not self.databaseBuilt and not self:BuildDatabase() then return {},0 end
+ query=tostring(query or ""):lower()
+ local out={}; local cap=tonumber(limit) or 60
+ for _,q in ipairs(self.database or {}) do
+  local hit=query=="" or q.name:lower():find(query,1,true)
+  if not hit and query~="" then
+   for _,line in ipairs(q.objectiveText or {}) do if tostring(line):lower():find(query,1,true) then hit=true; break end end
+  end
+  if hit then out[#out+1]=q; if #out>=cap then break end end
+ end
+ return out,self.databaseCount or 0
+end
+function A:GetQuestieStatus()
+ return type(_G.Questie)=="table" and type(_G.Questie.API)=="table" and _G.Questie.API.isReady==true
+end
+
 function A:Scan()
  self.active={}
  for i=1,(GetNumQuestLogEntries and GetNumQuestLogEntries() or 0) do
@@ -65,8 +163,21 @@ local function refresh()
   add("LEVEL "..UnitLevel("player").." • "..(UnitFactionGroup("player") or "Faction"),"GameFontNormal")
   for _,z in ipairs(A:SuggestedZones()) do add(z.name.." ("..z.lo.."-"..z.hi..")","GameFontNormal"); add(z.note) end
   add("Zone ranges are Wowhead's recommended content ranges, not a guaranteed fastest route.")
+ elseif tab=="database" then
+  local results,total=A:SearchDatabase(searchBox and searchBox:GetText() or "",60)
+  add("FOREVER QUEST DATABASE • "..tostring(total).." quests available","GameFontNormal")
+  add(A:GetQuestieStatus() and "Questie is ready — map pins and its native tracker are active." or "Questie not detected/ready. Install Questie + QuestieDB for map markers and full tracking.")
+  if not A.databaseBuilt then add("Quest database is unavailable. Install the Forever-compatible QuestieDB addon and restart the game.") end
+  for _,q in ipairs(results) do
+   add(q.name.."  •  ID "..q.id.."  •  Level "..tostring(q.questLevel or q.requiredLevel or "?"),"GameFontNormal")
+   for _,line in ipairs(q.objectiveText or {}) do add("   "..tostring(line),"GameFontHighlightSmall") end
+   if #q.objectives>0 then for _,line in ipairs(q.objectives) do add("   - "..line,"GameFontHighlightSmall") end end
+   if #q.prerequisites>0 then add("   Prerequisites: "..table.concat(q.prerequisites,", "),"GameFontHighlightSmall") end
+  end
+  if #results==0 then add("No matching quests. Try a shorter name or objective keyword.") end
+  if #results>=60 then add("Showing the first 60 matches. Refine the search to narrow the results.") end
  elseif tab=="dungeons" then
-  add("DUNGEON QUEST REFERENCE • "..#A.questData.." quests indexed","GameFontNormal")
+  add("DUNGEON QUEST REFERENCE • "..#A.questData.." curated records","GameFontNormal")
   local faction=UnitFactionGroup and UnitFactionGroup("player") or "Horde"
   for _,q in ipairs(A.questData) do if q.faction=="Both" or q.faction==faction then
    add(q.name.." — quest level "..tostring(q.level or "?"),"GameFontNormal")
@@ -90,12 +201,28 @@ local function build()
  local title=label(frame,"|cffffd27aThe Taverners|r — Quest & Leveling Companion",-18,"GameFontNormalLarge"); title:SetWidth(600)
  local close=CreateFrame("Button",nil,frame,"UIPanelCloseButton"); close:SetPoint("TOPRIGHT",-4,-4)
  local function btn(t,x,k) local b=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); b:SetSize(120,24); b:SetPoint("TOPLEFT",x,-48); b:SetText(t); b:SetScript("OnClick",function() tab=k; refresh() end) end
- btn("Active Quests",18,"quests"); btn("Leveling Zones",145,"zones"); btn("Dungeon Quests",272,"dungeons")
- local s=CreateFrame("ScrollFrame","TavernersQLCScroll",frame,"UIPanelScrollFrameTemplate"); s:SetPoint("TOPLEFT",18,-82); s:SetPoint("BOTTOMRIGHT",-36,18)
+ btn("Active Quests",18,"quests"); btn("Leveling Zones",145,"zones"); btn("Dungeon Quests",272,"dungeons"); btn("All Quests",399,"database")
+ searchBox=CreateFrame("EditBox","TavernersQLCSearch",frame,"InputBoxTemplate")
+ searchBox:SetSize(260,24); searchBox:SetPoint("TOPLEFT",18,-78); searchBox:SetAutoFocus(false); searchBox:SetText("")
+ searchBox:SetScript("OnTextChanged",function() if tab=="database" then refresh() end end)
+ local s=CreateFrame("ScrollFrame","TavernersQLCScroll",frame,"UIPanelScrollFrameTemplate"); s:SetPoint("TOPLEFT",18,-112); s:SetPoint("BOTTOMRIGHT",-36,18)
  content=CreateFrame("Frame",nil,s); content:SetSize(640,1); s:SetScrollChild(content)
 end
-A.UI={Toggle=function() build(); if frame:IsShown() then frame:Hide() else frame:Show(); A:Scan(); refresh() end end,Refresh=refresh}
+A.UI={Toggle=function() build(); if frame:IsShown() then frame:Hide() else frame:Show(); A:Scan(); if not A.databaseBuilt then A:BuildDatabase() end; refresh() end end,Refresh=refresh}
 local ev=CreateFrame("Frame"); ev:RegisterEvent("PLAYER_LOGIN"); ev:RegisterEvent("QUEST_LOG_UPDATE"); ev:RegisterEvent("QUEST_ACCEPTED"); ev:RegisterEvent("QUEST_TURNED_IN")
-ev:SetScript("OnEvent",function() A:Scan(); if frame and frame:IsShown() then refresh() end end)
+ev:SetScript("OnEvent",function(_,event)
+ if event=="PLAYER_LOGIN" then
+  A:Scan()
+  if not A.databaseBuilt then A:BuildDatabase() end
+  if _G.Questie and _G.Questie.API and _G.Questie.API.RegisterOnReady then
+   pcall(_G.Questie.API.RegisterOnReady,function()
+    if _G.Questie.API.RegisterForQuestUpdates then
+     pcall(_G.Questie.API.RegisterForQuestUpdates,function() A:Scan(); if frame and frame:IsShown() then refresh() end end)
+    end
+   end)
+  end
+ else A:Scan() end
+ if frame and frame:IsShown() then refresh() end
+end)
 SLASH_TAVERNERSQLCOMPANION1="/tquest"; SLASH_TAVERNERSQLCOMPANION2="/tqlc"; SlashCmdList=SlashCmdList or {}
 SlashCmdList.TAVERNERSQLCOMPANION=function() A.UI:Toggle() end
