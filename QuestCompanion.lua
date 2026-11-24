@@ -196,17 +196,9 @@ function A:BuildDungeonQuestIndex()
   for _,row in ipairs(objectives[1] or {}) do addAreas(NpcDB,row[1]) end
   for _,row in ipairs(objectives[2] or {}) do addAreas(ObjectDB,row[1]) end
   for _,row in ipairs(objectives[5] or {}) do addAreas(NpcDB,row[2]) end
-  local zoneSort=tonumber(SafeGet(QuestDB,"zoneOrSort",qid)) or 0
-  if zoneSort>0 then
-   local key=tostring(zoneSort)
-   local areaName=areaNames[key]
-   if areaName==nil then
-    areaName=""
-    if C_Map and C_Map.GetAreaInfo then local success,name=pcall(C_Map.GetAreaInfo,zoneSort); if success and name then areaName=name end end
-    areaNames[key]=areaName
-   end
-   if areaName~="" then foundAreas[key]={id=zoneSort,name=areaName} end
-  end
+  local starters=SafeGet(QuestDB,"startedBy",qid) or {}
+  for _,id in ipairs(starters[1] or {}) do addAreas(NpcDB,id) end
+  for _,id in ipairs(starters[2] or {}) do addAreas(ObjectDB,id) end
   if next(foundAreas) then
    local starter=SafeGet(QuestDB,"startedBy",qid) or {}
    local starterId=starter[1] and starter[1][1]
@@ -234,7 +226,7 @@ function A:BuildDungeonQuestIndex()
  self.dungeonQuestIndexReady=true
  return true
 end
-function A:GetDungeonQuests(dungeonName)
+function A:GetDungeonQuests(dungeonName,includeDatabase)
  local out,seen={},{}
  local target=NormalizeAreaName(dungeonName)
  local function add(q)
@@ -245,14 +237,14 @@ function A:GetDungeonQuests(dungeonName)
   ["temple of atal'hakkar"]={"sunken temple","temple of atal'hakkar"},
   ["sunken temple"]={"sunken temple","temple of atal'hakkar"},
   ["dire maul"]={"dire maul east","dire maul west","dire maul north","dire maul"},
-  ["the stockade"]={"stockade"},
+  ["stockade"]={"stockade"},
   ["deadmines"]={"deadmines"},
  }
  for _,q in ipairs(self.questData) do
   local key=NormalizeAreaName(q.dungeon)
   if not dungeonName or key==target or (target=="dire maul" and key:find("dire maul",1,true)) then add(q) end
  end
- if dungeonName and self:BuildDungeonQuestIndex() then
+ if dungeonName and includeDatabase and self:BuildDungeonQuestIndex() then
   local names=aliases[target] or {target}
   local matches={}
   for areaName,records in pairs(self.dungeonQuestIndex or {}) do
