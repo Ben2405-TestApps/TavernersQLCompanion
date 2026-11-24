@@ -33,3 +33,14 @@ Interface target 16001. Live-client API testing is still required.
 ## Suite integration (0.5.0)
 
 This release remains integrated with Questie and QuestieDB for the quest catalogue, objectives and active quest route. Guild Hall can surface the companion's active quest summary. Quest reward gear comparisons and expanded progression controls remain planned work and should not be considered complete until implemented and tested in the live client.
+
+
+## Quest reward capture and equipment comparison (0.6.0)
+
+- Added a Rewards tab to the quest companion.
+- When a quest offer or turn-in window is open, the addon captures the visible guaranteed rewards, choice rewards, XP and money.
+- Captured equipment rewards are compared with the currently equipped item in the matching inventory slot.
+- Item-level differences are shown where the client has item data; the addon explicitly tells players to compare stats and special effects rather than treating item level as a definitive upgrade score.
+- Captured reward data is saved locally per character and can be viewed later.
+
+The client does not expose a complete reward list for every quest in QuestieDB. The reward catalogue is therefore populated as players visit quest givers and open quest offer/turn-in windows. This is an equipment comparison aid, not an automatic stat simulator or a complete precomputed reward database.
