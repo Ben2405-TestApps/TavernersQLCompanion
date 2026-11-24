@@ -4,6 +4,7 @@
 ## Author: The Taverners Guild
 ## Version: 0.2.0
 ## Dependencies: TavernersCore
+## OptionalDeps: Questie, QuestieDB
 ## SavedVariables: TavernersQLCompanionDB
 QuestData.lua
 QuestCompanion.lua
