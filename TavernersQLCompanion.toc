@@ -2,7 +2,8 @@
 ## Title: Taverners Quest & Leveling Companion
 ## Notes: Quest tracking and leveling zone guidance.
 ## Author: The Taverners Guild
-## Version: 0.1.0
+## Version: 0.2.0
 ## Dependencies: TavernersCore
 ## SavedVariables: TavernersQLCompanionDB
+QuestData.lua
 QuestCompanion.lua
