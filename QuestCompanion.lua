@@ -256,12 +256,11 @@ local function build()
  local s=CreateFrame("ScrollFrame","TavernersQLCScroll",frame,"UIPanelScrollFrameTemplate"); s:SetPoint("TOPLEFT",18,-112); s:SetPoint("BOTTOMRIGHT",-36,18)
  content=CreateFrame("Frame",nil,s); content:SetSize(640,1); s:SetScrollChild(content)
 end
-A.UI={Toggle=function() build(); if frame:IsShown() then frame:Hide() else frame:Show(); A:Scan(); if not A.databaseBuilt then A:BuildDatabase() end; refresh() end end,Refresh=refresh}
+A.UI={Toggle=function() build(); if frame:IsShown() then frame:Hide() else frame:Show(); A:Scan(); refresh() end end,Refresh=refresh}
 local ev=CreateFrame("Frame"); ev:RegisterEvent("PLAYER_LOGIN"); ev:RegisterEvent("QUEST_LOG_UPDATE"); ev:RegisterEvent("QUEST_ACCEPTED"); ev:RegisterEvent("QUEST_TURNED_IN")
 ev:SetScript("OnEvent",function(_,event)
  if event=="PLAYER_LOGIN" then
   A:Scan()
-  if not A.databaseBuilt then A:BuildDatabase() end
   if _G.Questie and _G.Questie.API and _G.Questie.API.RegisterOnReady then
    pcall(_G.Questie.API.RegisterOnReady,function()
     if _G.Questie.API.RegisterForQuestUpdates then
