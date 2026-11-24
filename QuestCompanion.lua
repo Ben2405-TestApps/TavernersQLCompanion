@@ -3,7 +3,6 @@ local Core=_G.TavernersCore
 if not Core then return end
 local Ref=ns and ns.QuestData or {}
 local DB=Core.Database:Register("TavernersQLCompanionDB",{version=2,zoneFavourites={},tracked={}},2)
-Core.Settings:Register("QuestCompanion", DB, {showRoute={label="Show active quest route",type="boolean",default=true}, showDatabase={label="Show full quest database",type="boolean",default=true}})
 local A={db=DB,active={},zones=Ref.zones or {},questData=Ref.dungeonQuests or {}}
 local QuestDB, NpcDB, ObjectDB, ItemDB
 local searchBox, databaseReady=false,nil
