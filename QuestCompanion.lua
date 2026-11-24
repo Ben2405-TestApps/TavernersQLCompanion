@@ -24,6 +24,42 @@ end
 local function AddObjective(out,text)
  if text and text~="" then out[#out+1]=tostring(text) end
 end
+local function SpawnSummary(db,id)
+ local spawns=SafeGet(db,"spawns",id)
+ if type(spawns)~="table" then return nil end
+ local areaIds={}
+ for areaId in pairs(spawns) do areaIds[#areaIds+1]=areaId end
+ table.sort(areaIds)
+ local area=areaIds[1]
+ local points=area and spawns[area]
+ if type(points)~="table" or not points[1] then return area and ("Area #"..tostring(area)) or nil end
+ local coords={}
+ for i=1,math.min(2,#points) do
+  local p=points[i]
+  if type(p)=="table" then coords[#coords+1]=string.format("%.1f, %.1f",tonumber(p[1]) or 0,tonumber(p[2]) or 0) end
+ end
+ return "Area #"..tostring(area)..(#coords>0 and (" ("..table.concat(coords,"; ")..")") or "")
+end
+local function BuildStarterLines(qid)
+ local out={}
+ local starter=SafeGet(QuestDB,"startedBy",qid) or {}
+ for _,id in ipairs(starter[1] or {}) do
+  local name=SafeGet(NpcDB,"name",id) or ("NPC "..id)
+  AddObjective(out,"Starts: "..name..(SpawnSummary(NpcDB,id) and (" — "..SpawnSummary(NpcDB,id)) or ""))
+  if #out>=6 then return out end
+ end
+ for _,id in ipairs(starter[2] or {}) do
+  local name=SafeGet(ObjectDB,"name",id) or ("Object "..id)
+  AddObjective(out,"Starts from object: "..name..(SpawnSummary(ObjectDB,id) and (" — "..SpawnSummary(ObjectDB,id)) or ""))
+  if #out>=6 then return out end
+ end
+ for _,id in ipairs(starter[3] or {}) do
+  local name=SafeGet(ItemDB,"name",id) or ("Item "..id)
+  AddObjective(out,"Starts from item: "..name)
+  if #out>=6 then return out end
+ end
+ return out
+end
 local function BuildObjectiveLines(qid)
  local out={}
  local lines=SafeGet(QuestDB,"objectivesText",qid)
@@ -33,17 +69,17 @@ local function BuildObjectiveLines(qid)
   return SafeGet(db,"name",id) or fallback or ("ID "..tostring(id))
  end
  for _,row in ipairs(data[1] or {}) do
-  AddObjective(out,"Kill "..entityName(NpcDB,row[1]).." — "..tostring(row[3] or 0))
+  AddObjective(out,"Kill "..entityName(NpcDB,row[1]).." — "..tostring(row[3] or 0)..(SpawnSummary(NpcDB,row[1]) and (" • "..SpawnSummary(NpcDB,row[1])) or ""))
  end
  for _,row in ipairs(data[2] or {}) do
-  AddObjective(out,"Use / interact with "..entityName(ObjectDB,row[1]).." — "..tostring(row[3] or 0))
+  AddObjective(out,"Use / interact with "..entityName(ObjectDB,row[1]).." — "..tostring(row[3] or 0)..(SpawnSummary(ObjectDB,row[1]) and (" • "..SpawnSummary(ObjectDB,row[1])) or ""))
  end
  for _,row in ipairs(data[3] or {}) do
   AddObjective(out,"Collect "..entityName(ItemDB,row[1]).." — "..tostring(row[3] or 0))
  end
  if data[4] then AddObjective(out,"Reputation objective — "..tostring(data[4][2] or "")) end
  for _,row in ipairs(data[5] or {}) do
-  AddObjective(out,"Kill credit: "..entityName(NpcDB,row[2]).." — "..tostring(row[4] or 1))
+  AddObjective(out,"Kill credit: "..entityName(NpcDB,row[2]).." — "..tostring(row[4] or 1)..(SpawnSummary(NpcDB,row[2]) and (" • "..SpawnSummary(NpcDB,row[2])) or ""))
  end
  for _,row in ipairs(data[6] or {}) do
   AddObjective(out,"Cast spell objective — spell "..tostring(row[1] or 0))
@@ -167,6 +203,7 @@ local function refresh()
   if not A.databaseBuilt then add("Quest database is unavailable. Install the Forever-compatible QuestieDB addon and restart the game.") end
   for _,q in ipairs(results) do
    add(q.name.."  •  ID "..q.id.."  •  Level "..tostring(q.questLevel or q.requiredLevel or "?"),"GameFontNormal")
+   for _,line in ipairs(BuildStarterLines(q.id)) do add("   "..line,"GameFontHighlightSmall") end
    for _,line in ipairs(q.objectiveText or {}) do add("   "..tostring(line),"GameFontHighlightSmall") end
    local objectiveDetails=BuildObjectiveLines(q.id)
    if #objectiveDetails>0 then for _,line in ipairs(objectiveDetails) do add("   - "..line,"GameFontHighlightSmall") end end
