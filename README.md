@@ -28,3 +28,8 @@ Install matching current Questie and QuestieDB releases together. Their public p
 The bundled 249-record dungeon list is a curated fallback, not the full database. With QuestieDB installed, the All Quests tab uses the much larger Forever dataset; some entries can still have incomplete objective coordinates or uncertain availability. Questie handles map pin rendering where the source data supports it. Check unusual prerequisites in game.
 
 Interface target 16001. Live-client API testing is still required.
+
+
+## Suite integration (0.5.0)
+
+This release remains integrated with Questie and QuestieDB for the quest catalogue, objectives and active quest route. Guild Hall can surface the companion's active quest summary. Quest reward gear comparisons and expanded progression controls remain planned work and should not be considered complete until implemented and tested in the live client.
