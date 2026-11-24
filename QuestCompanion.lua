@@ -161,8 +161,8 @@ function A:GetActiveCount() return #self.active end
 local RewardSlots = {
   INVTYPE_HEAD=1, INVTYPE_NECK=2, INVTYPE_SHOULDER=3, INVTYPE_CLOAK=15,
   INVTYPE_CHEST=5, INVTYPE_ROBE=5, INVTYPE_WRIST=9, INVTYPE_HAND=10,
-  INVTYPE_WAIST=6, INVTYPE_LEGS=7, INVTYPE_FEET=8, INVTYPE_FINGER=11,
-  INVTYPE_TRINKET=13, INVTYPE_WEAPON=16, INVTYPE_2HWEAPON=16,
+  INVTYPE_WAIST=6, INVTYPE_LEGS=7, INVTYPE_FEET=8, INVTYPE_FINGER={11,12},
+  INVTYPE_TRINKET={13,14}, INVTYPE_WEAPON=16, INVTYPE_2HWEAPON=16,
   INVTYPE_WEAPONMAINHAND=16, INVTYPE_WEAPONOFFHAND=17, INVTYPE_SHIELD=17,
   INVTYPE_HOLDABLE=17, INVTYPE_RANGED=18, INVTYPE_RANGEDRIGHT=18, INVTYPE_RELIC=18,
 }
@@ -211,20 +211,29 @@ function A:GetSavedRewards()
  return result
 end
 local function RewardEquipmentComparison(item)
- local slot=RewardSlots[item.equipSlot or ""]
- if not slot then return "Not an equipment slot" end
- local currentLink=GetInventoryItemLink and GetInventoryItemLink("player",slot)
- if not currentLink then return "No item currently equipped in this slot" end
- local currentName,_,_,currentLevel=GetItemInfo(currentLink)
- local rewardName=item.name or "Reward"
- if currentName and currentName==rewardName then return "Already equipped" end
- if tonumber(item.itemLevel) and tonumber(currentLevel) then
-  local delta=tonumber(item.itemLevel)-tonumber(currentLevel)
+ local slots=RewardSlots[item.equipSlot or ""]
+ if not slots then return "Not an equipment slot" end
+ if type(slots)~="table" then slots={slots} end
+ local bestName,bestLevel
+ for _,slot in ipairs(slots) do
+  local currentLink=GetInventoryItemLink and GetInventoryItemLink("player",slot)
+  if currentLink then
+   local currentName,_,_,currentLevel=GetItemInfo(currentLink)
+   if currentName and currentName==(item.name or "") then return "Already equipped" end
+   currentLevel=tonumber(currentLevel)
+   if currentName and (not bestLevel or (currentLevel and currentLevel>bestLevel)) then
+    bestName,bestLevel=currentName,currentLevel
+   end
+  end
+ end
+ if not bestName then return "No item currently equipped in this slot" end
+ if tonumber(item.itemLevel) and bestLevel then
+  local delta=tonumber(item.itemLevel)-bestLevel
   if delta>0 then return "Higher item level by "..delta.." (check stats and effects)" end
   if delta<0 then return "Lower item level by "..math.abs(delta).." (may still have better stats/effects)" end
   return "Same item level (compare stats and effects)"
  end
- return "Compare stats against "..tostring(currentName or "equipped item")
+ return "Compare stats against "..tostring(bestName)
 end
 local function NormalizeAreaName(value)
  return tostring(value or ""):lower():gsub("’","'"):gsub("^the%s+",""):gsub("%s+"," ")
