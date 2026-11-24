@@ -20,7 +20,11 @@ end
 function A:GetActiveCount() return #self.active end
 function A:GetDungeonQuests(dungeonName)
  local out={}
- for _,q in ipairs(self.questData) do if not dungeonName or q.dungeon==dungeonName then out[#out+1]=q end end
+ local target=tostring(dungeonName or ""):lower():gsub("’","'")
+ for _,q in ipairs(self.questData) do
+  local key=tostring(q.dungeon or ""):lower():gsub("’","'")
+  if not dungeonName or key==target then out[#out+1]=q end
+ end
  return out
 end
 function A:GetDashboardSummary() return #self.active.." active quests • "..#self.questData.." dungeon quests indexed" end
