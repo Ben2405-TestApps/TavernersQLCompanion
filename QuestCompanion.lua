@@ -69,20 +69,20 @@ local function BuildObjectiveLines(qid)
   return SafeGet(db,"name",id) or fallback or ("ID "..tostring(id))
  end
  for _,row in ipairs(data[1] or {}) do
-  AddObjective(out,"Kill "..entityName(NpcDB,row[1]).." — "..tostring(row[3] or 0)..(SpawnSummary(NpcDB,row[1]) and (" • "..SpawnSummary(NpcDB,row[1])) or ""))
+  AddObjective(out,"Kill "..tostring(row[2] or entityName(NpcDB,row[1])).." — "..tostring(row[3] or 0)..(SpawnSummary(NpcDB,row[1]) and (" • "..SpawnSummary(NpcDB,row[1])) or ""))
  end
  for _,row in ipairs(data[2] or {}) do
-  AddObjective(out,"Use / interact with "..entityName(ObjectDB,row[1]).." — "..tostring(row[3] or 0)..(SpawnSummary(ObjectDB,row[1]) and (" • "..SpawnSummary(ObjectDB,row[1])) or ""))
+  AddObjective(out,"Use / interact with "..tostring(row[2] or entityName(ObjectDB,row[1])).." — "..tostring(row[3] or 0)..(SpawnSummary(ObjectDB,row[1]) and (" • "..SpawnSummary(ObjectDB,row[1])) or ""))
  end
  for _,row in ipairs(data[3] or {}) do
-  AddObjective(out,"Collect "..entityName(ItemDB,row[1]).." — "..tostring(row[3] or 0))
+  AddObjective(out,"Collect "..tostring(row[2] or entityName(ItemDB,row[1])).." — "..tostring(row[3] or 0))
  end
  if data[4] then AddObjective(out,"Reputation objective — "..tostring(data[4][2] or "")) end
  for _,row in ipairs(data[5] or {}) do
-  AddObjective(out,"Kill credit: "..entityName(NpcDB,row[2]).." — "..tostring(row[4] or 1)..(SpawnSummary(NpcDB,row[2]) and (" • "..SpawnSummary(NpcDB,row[2])) or ""))
+  AddObjective(out,"Kill credit: "..tostring(row[3] or entityName(NpcDB,row[2]))..(SpawnSummary(NpcDB,row[2]) and (" • "..SpawnSummary(NpcDB,row[2])) or ""))
  end
  for _,row in ipairs(data[6] or {}) do
-  AddObjective(out,"Cast spell objective — spell "..tostring(row[1] or 0))
+  AddObjective(out,"Cast spell objective — "..tostring(row[2] or ("spell "..tostring(row[1] or 0)))..(tonumber(row[3]) and row[3]>0 and (" (item "..row[3]..")") or ""))
  end
  for _,row in ipairs(SafeGet(QuestDB,"extraObjectives",qid) or {}) do
   AddObjective(out,"Special: "..tostring(row[3] or "Hidden objective"))
@@ -106,6 +106,8 @@ function A:BuildDatabase(force)
     objectiveText=SafeGet(QuestDB,"objectivesText",id) or {},
     prerequisites=SafeGet(QuestDB,"preQuestSingle",id) or {},
     groupedPrerequisites=SafeGet(QuestDB,"preQuestGroup",id) or {},
+    childQuests=SafeGet(QuestDB,"childQuests",id) or {},
+    nextQuestInChain=SafeGet(QuestDB,"nextQuestInChain",id) or 0,
    }
    index[#index+1]=row; byId[id]=row
   end
@@ -211,7 +213,10 @@ local function refresh()
    for _,line in ipairs(q.objectiveText or {}) do add("   "..tostring(line),"GameFontHighlightSmall") end
    local objectiveDetails=BuildObjectiveLines(q.id)
    if #objectiveDetails>0 then for _,line in ipairs(objectiveDetails) do add("   - "..line,"GameFontHighlightSmall") end end
-   if #q.prerequisites>0 then add("   Prerequisites: "..table.concat(q.prerequisites,", "),"GameFontHighlightSmall") end
+   if #q.prerequisites>0 then add("   Any one prerequisite: "..table.concat(q.prerequisites,", "),"GameFontHighlightSmall") end
+   if #q.groupedPrerequisites>0 then add("   All required prerequisites: "..table.concat(q.groupedPrerequisites,", "),"GameFontHighlightSmall") end
+   if #q.childQuests>0 then add("   Unlocks quest IDs: "..table.concat(q.childQuests,", "),"GameFontHighlightSmall") end
+   if q.nextQuestInChain and q.nextQuestInChain>0 then add("   Next in chain: quest "..q.nextQuestInChain,"GameFontHighlightSmall") end
   end
   if #results==0 then add("No matching quests. Try a shorter name or objective keyword.") end
   if #results>=60 then add("Showing the first 60 matches. Refine the search to narrow the results.") end
