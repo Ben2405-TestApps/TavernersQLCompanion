@@ -10,6 +10,7 @@ WoW Forever quest tracker and leveling reference.
 - Hooks Questie's public ready and quest-update APIs so the Companion refreshes with Questie quest progress.
 - Retains a curated 249-record dungeon quest pack as a fallback/reference when QuestieDB is unavailable.
 - Adds an Active Quest Route tab that collects known creature/object spawn points for current quests from QuestieDB, grouped by area and sorted by coordinates.
+- Builds a lazy QuestieDB instance index from actual NPC/object objective and starter spawn areas, allowing the Dungeon Tool to discover additional dungeon-linked quests without guessing from quest titles or broad zone tags.
 - Separates the quest data pack from the UI so the catalogue can be expanded independently.
 - Registers with TavernersCore for the Guild Hall dashboard.
 
