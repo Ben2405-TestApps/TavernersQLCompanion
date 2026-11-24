@@ -18,6 +18,11 @@ function A:Scan()
  end
 end
 function A:GetActiveCount() return #self.active end
+function A:GetDungeonQuests(dungeonName)
+ local out={}
+ for _,q in ipairs(self.questData) do if not dungeonName or q.dungeon==dungeonName then out[#out+1]=q end end
+ return out
+end
 function A:GetDashboardSummary() return #self.active.." active quests • "..#self.questData.." dungeon quests indexed" end
 function A:SuggestedZones()
  local level=UnitLevel("player"); local faction=UnitFactionGroup and UnitFactionGroup("player") or "Horde"; local out={}
