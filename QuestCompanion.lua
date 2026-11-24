@@ -74,7 +74,7 @@ local function refresh()
    if q.coords then add("Coordinates: "..q.coords) end
    if q.prerequisite then add("Prerequisite: "..q.prerequisite) end
   end end
-  add("Curated starter data; check Wowhead for the full updated quest list.")
+  add("Curated 249-entry reference; class-only and some less common variants still need verification. Check Wowhead for the latest prerequisites.")
  else
   add("ACTIVE QUEST LOG • "..#A.active.." quests","GameFontNormal")
   for _,q in ipairs(A.active) do add((q.complete and "|cff55dd77[Complete]|r " or "")..q.title.." (Level "..tostring(q.level or "?")..")","GameFontNormal"); for _,o in ipairs(q.objectives) do add("   "..(o.done and "✓ " or "• ")..o.text,"GameFontHighlightSmall") end end
