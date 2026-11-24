@@ -38,7 +38,12 @@ local function SpawnSummary(db,id)
   local p=points[i]
   if type(p)=="table" then coords[#coords+1]=string.format("%.1f, %.1f",tonumber(p[1]) or 0,tonumber(p[2]) or 0) end
  end
- return "Area #"..tostring(area)..(#coords>0 and (" ("..table.concat(coords,"; ")..")") or "")
+ local areaName
+ if C_Map and C_Map.GetAreaInfo then
+  local ok,name=pcall(C_Map.GetAreaInfo,area)
+  if ok then areaName=name end
+ end
+ return tostring(areaName or ("Area #"..tostring(area)))..(#coords>0 and (" ("..table.concat(coords,"; ")..")") or "")
 end
 local function BuildStarterLines(qid)
  local out={}
@@ -208,7 +213,11 @@ local function refresh()
   add(A:GetQuestieStatus() and "Questie is ready — map pins and its native tracker are active." or "Questie not detected/ready. Install Questie + QuestieDB for map markers and full tracking.")
   if not A.databaseBuilt then add("Quest database is unavailable. Install the Forever-compatible QuestieDB addon and restart the game.") end
   for _,q in ipairs(results) do
-   add(q.name.."  •  ID "..q.id.."  •  Level "..tostring(q.questLevel or q.requiredLevel or "?"),"GameFontNormal")
+   local zoneName
+   if q.zoneOrSort and q.zoneOrSort>0 and C_Map and C_Map.GetAreaInfo then
+    local ok,name=pcall(C_Map.GetAreaInfo,q.zoneOrSort); if ok then zoneName=name end
+   end
+   add(q.name.."  •  ID "..q.id.."  •  Level "..tostring(q.questLevel or q.requiredLevel or "?")..(zoneName and (" • "..zoneName) or ""),"GameFontNormal")
    for _,line in ipairs(BuildStarterLines(q.id)) do add("   "..line,"GameFontHighlightSmall") end
    for _,line in ipairs(q.objectiveText or {}) do add("   "..tostring(line),"GameFontHighlightSmall") end
    local objectiveDetails=BuildObjectiveLines(q.id)
