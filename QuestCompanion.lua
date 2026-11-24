@@ -2,7 +2,8 @@ local ADDON,ns=...
 local Core=_G.TavernersCore
 if not Core then return end
 local Ref=ns and ns.QuestData or {}
-local DB=Core.Database:Register("TavernersQLCompanionDB",{version=2,zoneFavourites={},tracked={}},2)
+local DB=Core.Database:Register("TavernersQLCompanionDB",{version=3,zoneFavourites={},tracked={},rewards={}},3)
+DB.rewards=DB.rewards or {}
 local A={db=DB,active={},zones=Ref.zones or {},questData=Ref.dungeonQuests or {}}
 local QuestDB, NpcDB, ObjectDB, ItemDB
 local searchBox, databaseReady=false,nil
@@ -156,6 +157,75 @@ function A:Scan()
  end
 end
 function A:GetActiveCount() return #self.active end
+
+local RewardSlots = {
+  INVTYPE_HEAD=1, INVTYPE_NECK=2, INVTYPE_SHOULDER=3, INVTYPE_CLOAK=15,
+  INVTYPE_CHEST=5, INVTYPE_ROBE=5, INVTYPE_WRIST=9, INVTYPE_HAND=10,
+  INVTYPE_WAIST=6, INVTYPE_LEGS=7, INVTYPE_FEET=8, INVTYPE_FINGER=11,
+  INVTYPE_TRINKET=13, INVTYPE_WEAPON=16, INVTYPE_2HWEAPON=16,
+  INVTYPE_WEAPONMAINHAND=16, INVTYPE_WEAPONOFFHAND=17, INVTYPE_SHIELD=17,
+  INVTYPE_HOLDABLE=17, INVTYPE_RANGED=18, INVTYPE_RANGEDRIGHT=18, INVTYPE_RELIC=18,
+}
+local function SafeQuestCall(fn, ...)
+ if type(fn)~="function" then return nil end
+ local ok,a,b,c,d,e,f,g=pcall(fn,...)
+ if ok then return a,b,c,d,e,f,g end
+end
+local function CaptureRewardItems(kind,count)
+ local items={}
+ for i=1,math.min(tonumber(count) or 0,20) do
+  local name,texture,quantity,quality,usable,itemID=SafeQuestCall(GetQuestItemInfo,kind,i)
+  local link=SafeQuestCall(GetQuestItemLink,kind,i)
+  itemID=tonumber(itemID) or (link and tonumber(link:match("item:(%d+)")))
+  local itemLevel,equipSlot
+  if itemID and GetItemInfo then
+   local infoName,infoLink,infoQuality,level,requiredLevel,itemType,itemSubType,maxStack,slot=GetItemInfo(itemID)
+   itemLevel=tonumber(level); equipSlot=slot
+   name=name or infoName; link=link or infoLink
+  end
+  if name or itemID then
+   items[#items+1]={name=name or ("Item "..tostring(itemID)),itemID=itemID,link=link,
+    quantity=tonumber(quantity) or 1,quality=tonumber(quality),usable=usable and true or false,
+    itemLevel=itemLevel,equipSlot=equipSlot}
+  end
+ end
+ return items
+end
+function A:CaptureQuestRewards()
+ local title=SafeQuestCall(GetTitleText) or "Unknown quest"
+ local questID=tonumber(SafeQuestCall(GetQuestID))
+ local key=questID and ("id:"..questID) or ("name:"..tostring(title))
+ local rewards=CaptureRewardItems("reward",SafeQuestCall(GetNumQuestRewards) or 0)
+ local choices=CaptureRewardItems("choice",SafeQuestCall(GetNumQuestChoices) or 0)
+ local xp=tonumber(SafeQuestCall(GetRewardXP)) or 0
+ local money=tonumber(SafeQuestCall(GetRewardMoney)) or 0
+ if #rewards==0 and #choices==0 and xp==0 and money==0 then return false end
+ DB.rewards[key]={id=questID,title=title,captured=Core.Util:Now(),rewards=rewards,choices=choices,xp=xp,money=money}
+ Core.Diagnostics:Log("INFO","Captured visible quest rewards for "..tostring(title))
+ return true
+end
+function A:GetSavedRewards()
+ local result={}
+ for _,record in pairs(DB.rewards or {}) do result[#result+1]=record end
+ table.sort(result,function(a,b) return (tonumber(a.captured) or 0)>(tonumber(b.captured) or 0) end)
+ return result
+end
+local function RewardEquipmentComparison(item)
+ local slot=RewardSlots[item.equipSlot or ""]
+ if not slot then return "Not an equipment slot" end
+ local currentLink=GetInventoryItemLink and GetInventoryItemLink("player",slot)
+ if not currentLink then return "No item currently equipped in this slot" end
+ local currentName,_,_,currentLevel=GetItemInfo(currentLink)
+ local rewardName=item.name or "Reward"
+ if currentName and currentName==rewardName then return "Already equipped" end
+ if tonumber(item.itemLevel) and tonumber(currentLevel) then
+  local delta=tonumber(item.itemLevel)-tonumber(currentLevel)
+  if delta>0 then return "Higher item level by "..delta.." (check stats and effects)" end
+  if delta<0 then return "Lower item level by "..math.abs(delta).." (may still have better stats/effects)" end
+  return "Same item level (compare stats and effects)"
+ end
+ return "Compare stats against "..tostring(currentName or "equipped item")
+end
 local function NormalizeAreaName(value)
  return tostring(value or ""):lower():gsub("’","'"):gsub("^the%s+",""):gsub("%s+"," ")
 end
@@ -329,6 +399,22 @@ local function refresh()
   end
   if #stops==0 and ready then add("No active quest objectives with known creature/object spawn coordinates were found. Check the All Quests tab for starter and objective details.") end
   if #stops>50 then add("Showing first 50 locations. The full list may be larger.") end
+ elseif tab=="rewards" then
+  local records=A:GetSavedRewards()
+  add("CAPTURED QUEST REWARDS • "..#records.." quests","GameFontNormal")
+  add("Rewards are recorded when you open a quest offer or turn-in window. The client does not expose a complete reward list for every quest in QuestieDB, so visit quest givers to build this personal catalogue.")
+  if #records==0 then add("No quest rewards captured yet. Open a quest offer or completed quest at an NPC to record its rewards.") end
+  for _,record in ipairs(records) do
+   add(record.title.." • "..(record.id and ("Quest "..record.id) or "Quest ID unavailable"),"GameFontNormal")
+   if record.xp>0 then add("Experience: "..record.xp,"GameFontHighlightSmall") end
+   if record.money>0 then add("Money: "..record.money.." copper","GameFontHighlightSmall") end
+   for _,item in ipairs(record.rewards or {}) do
+    add("Guaranteed: "..item.name.." x"..item.quantity.." — "..RewardEquipmentComparison(item),"GameFontHighlight")
+   end
+   for _,item in ipairs(record.choices or {}) do
+    add("Choice: "..item.name.." x"..item.quantity.." — "..RewardEquipmentComparison(item),"GameFontHighlight")
+   end
+  end
  elseif tab=="dungeons" then
   add("DUNGEON QUEST REFERENCE • "..#A.questData.." curated records","GameFontNormal")
   local faction=UnitFactionGroup and UnitFactionGroup("player") or "Horde"
@@ -353,12 +439,12 @@ local function build()
  if frame.SetBackdrop then frame:SetBackdrop({bgFile="Interface/Tooltips/UI-Tooltip-Background",edgeFile="Interface/Tooltips/UI-Tooltip-Border",tile=true,tileSize=16,edgeSize=16,insets={left=4,right=4,top=4,bottom=4}}); frame:SetBackdropColor(.07,.05,.035,.97) end
  local title=label(frame,"|cffffd27aThe Taverners|r — Quest & Leveling Companion",-18,"GameFontNormalLarge"); title:SetWidth(600)
  local close=CreateFrame("Button",nil,frame,"UIPanelCloseButton"); close:SetPoint("TOPRIGHT",-4,-4)
- local function btn(t,x,k) local b=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); b:SetSize(120,24); b:SetPoint("TOPLEFT",x,-48); b:SetText(t); b:SetScript("OnClick",function()
+ local function btn(t,x,k) local b=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); b:SetSize(102,24); b:SetPoint("TOPLEFT",x,-48); b:SetText(t); b:SetScript("OnClick",function()
   tab=k
   if searchBox then if k=="database" then searchBox:Show(); A:BuildDatabase() else searchBox:Hide() end end
   refresh()
  end) end
- btn("Active Quests",18,"quests"); btn("Leveling Zones",145,"zones"); btn("Dungeon Quests",272,"dungeons"); btn("All Quests",399,"database"); btn("Quest Route",526,"route")
+ btn("Active",18,"quests"); btn("Leveling",126,"zones"); btn("Dungeons",234,"dungeons"); btn("All Quests",342,"database"); btn("Quest Route",450,"route"); btn("Rewards",558,"rewards")
  searchBox=CreateFrame("EditBox","TavernersQLCSearch",frame,"InputBoxTemplate")
  searchBox:SetSize(260,24); searchBox:SetPoint("TOPLEFT",18,-78); searchBox:SetAutoFocus(false); searchBox:SetText(""); searchBox:Hide()
  searchBox:SetScript("OnTextChanged",function() if tab=="database" then refresh() end end)
@@ -366,8 +452,9 @@ local function build()
  content=CreateFrame("Frame",nil,s); content:SetSize(640,1); s:SetScrollChild(content)
 end
 A.UI={Toggle=function() build(); if frame:IsShown() then frame:Hide() else frame:Show(); A:Scan(); refresh() end end,Refresh=refresh}
-local ev=CreateFrame("Frame"); ev:RegisterEvent("PLAYER_LOGIN"); ev:RegisterEvent("QUEST_LOG_UPDATE"); ev:RegisterEvent("QUEST_ACCEPTED"); ev:RegisterEvent("QUEST_TURNED_IN")
+local ev=CreateFrame("Frame"); ev:RegisterEvent("PLAYER_LOGIN"); ev:RegisterEvent("QUEST_LOG_UPDATE"); ev:RegisterEvent("QUEST_ACCEPTED"); ev:RegisterEvent("QUEST_TURNED_IN"); ev:RegisterEvent("QUEST_DETAIL"); ev:RegisterEvent("QUEST_COMPLETE")
 ev:SetScript("OnEvent",function(_,event)
+ if event=="QUEST_DETAIL" or event=="QUEST_COMPLETE" then A:CaptureQuestRewards() end
  if event=="PLAYER_LOGIN" then
   A:Scan()
   if _G.Questie and _G.Questie.API and _G.Questie.API.RegisterOnReady then
