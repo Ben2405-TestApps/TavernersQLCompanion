@@ -182,6 +182,10 @@ local function CaptureRewardItems(kind,count)
    local infoName,infoLink,infoQuality,level,requiredLevel,itemType,itemSubType,maxStack,slot=GetItemInfo(itemID)
    itemLevel=tonumber(level); equipSlot=slot
    name=name or infoName; link=link or infoLink
+   if not equipSlot and type(GetItemInfoInstant)=="function" then
+    local _,_,_,instantSlot=GetItemInfoInstant(itemID)
+    equipSlot=instantSlot
+   end
   end
   if name or itemID then
    items[#items+1]={name=name or ("Item "..tostring(itemID)),itemID=itemID,link=link,
