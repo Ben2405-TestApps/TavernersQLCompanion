@@ -68,11 +68,8 @@ function A:BuildDatabase(force)
     questLevel=SafeGet(QuestDB,"questLevel",id) or 0,
     zoneOrSort=SafeGet(QuestDB,"zoneOrSort",id) or 0,
     objectiveText=SafeGet(QuestDB,"objectivesText",id) or {},
-    objectives=BuildObjectiveLines(id),
     prerequisites=SafeGet(QuestDB,"preQuestSingle",id) or {},
     groupedPrerequisites=SafeGet(QuestDB,"preQuestGroup",id) or {},
-    startedBy=SafeGet(QuestDB,"startedBy",id) or {},
-    finishedBy=SafeGet(QuestDB,"finishedBy",id) or {},
    }
    index[#index+1]=row; byId[id]=row
   end
@@ -171,7 +168,8 @@ local function refresh()
   for _,q in ipairs(results) do
    add(q.name.."  •  ID "..q.id.."  •  Level "..tostring(q.questLevel or q.requiredLevel or "?"),"GameFontNormal")
    for _,line in ipairs(q.objectiveText or {}) do add("   "..tostring(line),"GameFontHighlightSmall") end
-   if #q.objectives>0 then for _,line in ipairs(q.objectives) do add("   - "..line,"GameFontHighlightSmall") end end
+   local objectiveDetails=BuildObjectiveLines(q.id)
+   if #objectiveDetails>0 then for _,line in ipairs(objectiveDetails) do add("   - "..line,"GameFontHighlightSmall") end end
    if #q.prerequisites>0 then add("   Prerequisites: "..table.concat(q.prerequisites,", "),"GameFontHighlightSmall") end
   end
   if #results==0 then add("No matching quests. Try a shorter name or objective keyword.") end
@@ -200,10 +198,14 @@ local function build()
  if frame.SetBackdrop then frame:SetBackdrop({bgFile="Interface/Tooltips/UI-Tooltip-Background",edgeFile="Interface/Tooltips/UI-Tooltip-Border",tile=true,tileSize=16,edgeSize=16,insets={left=4,right=4,top=4,bottom=4}}); frame:SetBackdropColor(.07,.05,.035,.97) end
  local title=label(frame,"|cffffd27aThe Taverners|r — Quest & Leveling Companion",-18,"GameFontNormalLarge"); title:SetWidth(600)
  local close=CreateFrame("Button",nil,frame,"UIPanelCloseButton"); close:SetPoint("TOPRIGHT",-4,-4)
- local function btn(t,x,k) local b=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); b:SetSize(120,24); b:SetPoint("TOPLEFT",x,-48); b:SetText(t); b:SetScript("OnClick",function() tab=k; refresh() end) end
+ local function btn(t,x,k) local b=CreateFrame("Button",nil,frame,"UIPanelButtonTemplate"); b:SetSize(120,24); b:SetPoint("TOPLEFT",x,-48); b:SetText(t); b:SetScript("OnClick",function()
+  tab=k
+  if searchBox then if k=="database" then searchBox:Show(); A:BuildDatabase() else searchBox:Hide() end end
+  refresh()
+ end) end
  btn("Active Quests",18,"quests"); btn("Leveling Zones",145,"zones"); btn("Dungeon Quests",272,"dungeons"); btn("All Quests",399,"database")
  searchBox=CreateFrame("EditBox","TavernersQLCSearch",frame,"InputBoxTemplate")
- searchBox:SetSize(260,24); searchBox:SetPoint("TOPLEFT",18,-78); searchBox:SetAutoFocus(false); searchBox:SetText("")
+ searchBox:SetSize(260,24); searchBox:SetPoint("TOPLEFT",18,-78); searchBox:SetAutoFocus(false); searchBox:SetText(""); searchBox:Hide()
  searchBox:SetScript("OnTextChanged",function() if tab=="database" then refresh() end end)
  local s=CreateFrame("ScrollFrame","TavernersQLCScroll",frame,"UIPanelScrollFrameTemplate"); s:SetPoint("TOPLEFT",18,-112); s:SetPoint("BOTTOMRIGHT",-36,18)
  content=CreateFrame("Frame",nil,s); content:SetSize(640,1); s:SetScrollChild(content)
