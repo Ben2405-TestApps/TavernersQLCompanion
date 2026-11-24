@@ -32,7 +32,7 @@ Interface target 16001. Live-client API testing is still required.
 
 ## Suite integration (0.5.0)
 
-This release remains integrated with Questie and QuestieDB for the quest catalogue, objectives and active quest route. Guild Hall can surface the companion's active quest summary. Quest reward gear comparisons and expanded progression controls remain planned work and should not be considered complete until implemented and tested in the live client.
+This 0.5.0 release integrated Questie and QuestieDB for the quest catalogue, objectives and active quest route. Version 0.6.0 adds captured quest reward comparisons; live-client testing is still required, and this is not a complete precomputed reward database or stat simulator.
 
 
 ## Quest reward capture and equipment comparison (0.6.0)
