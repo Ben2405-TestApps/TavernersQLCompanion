@@ -20,10 +20,29 @@ end
 function A:GetActiveCount() return #self.active end
 function A:GetDungeonQuests(dungeonName)
  local out={}
- local target=tostring(dungeonName or ""):lower():gsub("’","'")
+ local target=tostring(dungeonName or ""):lower():gsub("’","'"):gsub("%s+"," ")
+ local aliases={
+  ["the stockades"]="the stockade",
+  ["temple of atal'hakkar"]="sunken temple",
+  ["the temple of atal'hakkar"]="sunken temple",
+  ["dire maul"]="dire maul east",
+  ["dire maul (east)"]="dire maul east",
+  ["dire maul (west)"]="dire maul west",
+  ["dire maul (north)"]="dire maul north",
+  ["lower blackrock spire"]="lower blackrock spire",
+  ["upper blackrock spire"]="upper blackrock spire",
+ }
+ local wanted=aliases[target] or target
+ local function matches(key)
+  if key==wanted then return true end
+  if target=="dire maul" then return key=="dire maul east" or key=="dire maul west" or key=="dire maul north" end
+  if target=="lower blackrock spire" then return key=="lower blackrock spire" end
+  if target=="upper blackrock spire" then return key=="upper blackrock spire" end
+  return false
+ end
  for _,q in ipairs(self.questData) do
-  local key=tostring(q.dungeon or ""):lower():gsub("’","'")
-  if not dungeonName or key==target then out[#out+1]=q end
+  local key=tostring(q.dungeon or ""):lower():gsub("’","'"):gsub("%s+"," ")
+  if not dungeonName or matches(key) then out[#out+1]=q end
  end
  return out
 end
