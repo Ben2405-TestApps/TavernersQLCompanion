@@ -177,7 +177,11 @@ function A:GetDungeonQuests(dungeonName)
  end
  return out
 end
-function A:GetDashboardSummary() return #self.active.." active quests • "..#self.questData.." dungeon quests indexed" end
+function A:GetDashboardSummary()
+ local total=self.databaseCount or #self.questData
+ local source=self.databaseBuilt and "Forever quest database" or "curated dungeon index"
+ return #self.active.." active quests • "..total.." quests available ("..source..")"
+end
 function A:SuggestedZones()
  local level=UnitLevel("player"); local faction=UnitFactionGroup and UnitFactionGroup("player") or "Horde"; local out={}
  for _,z in ipairs(self.zones) do if level>=z.lo and level<=z.hi and (z.f=="Both" or z.f==faction) then out[#out+1]=z end end
