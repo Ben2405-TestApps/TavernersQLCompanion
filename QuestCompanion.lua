@@ -102,7 +102,7 @@ end
 function A:Scan()
  self.active={}
  for i=1,(GetNumQuestLogEntries and GetNumQuestLogEntries() or 0) do
-  local title,level,_,_,header,_,complete,_,qid=GetQuestLogTitle(i)
+  local title,level,_,header,_,complete,_,qid=GetQuestLogTitle(i)
   if title and not header then
    local q={title=title,level=level,complete=complete and true or false,id=qid or title,objectives={}}
    for j=1,(GetNumQuestLeaderBoards and GetNumQuestLeaderBoards(i) or 0) do
