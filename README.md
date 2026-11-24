@@ -1,7 +1,20 @@
 # Taverners Quest & Leveling Companion
 
-Foundation release for WoW Forever. Reads the active quest log and objective progress, and suggests broad leveling zones by character level and faction. Settings are saved and the addon registers with TavernersCore.
+WoW Forever quest tracker and leveling reference.
 
-Install TavernersCore, place this folder in Interface/AddOns/TavernersQLCompanion, enable both addons, then use /tquest or /tqlc.
+## Features
+- Reads active quests and objective completion from the live quest log.
+- Suggests leveling zones by character level and faction using Wowhead Forever world-map level ranges.
+- Includes a starter index of 30 dungeon quests with giver locations, coordinates and known prerequisites.
+- Separates the quest data pack from the UI so the catalogue can be expanded independently.
+- Registers with TavernersCore for the Guild Hall dashboard.
 
-This is not yet a complete quest database or optimal route planner. Quest chains, verified coordinates, prerequisites and rewards will be added as curated data packs. Zone ranges are broad guidance. Interface target 16001; live-client testing required.
+Install TavernersCore, then place this folder in `Interface/AddOns/TavernersQLCompanion`. Use `/tquest` or `/tqlc`.
+
+## Data sources
+- [Wowhead Forever — Every Dungeon Quest](https://www.wowhead.com/forever/guide/dungeons/every-dungeon-quest-location)
+- [Wowhead Forever — World Map zone level ranges](https://www.wowhead.com/forever/classicplus-world-map-outro)
+
+The current dataset is a curated starter selection, not a complete quest database or route optimiser. Some quest details may change during Forever updates. Verify unusual prerequisites in game.
+
+Interface target 16001. Live-client API testing is still required.
