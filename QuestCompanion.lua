@@ -156,70 +156,127 @@ function A:Scan()
  end
 end
 function A:GetActiveCount() return #self.active end
-function A:GetDungeonQuests(dungeonName)
- local out={}
- local target=tostring(dungeonName or ""):lower():gsub("’","'"):gsub("%s+"," ")
- local aliases={
-  ["the stockades"]="the stockade",
-  ["temple of atal'hakkar"]="sunken temple",
-  ["the temple of atal'hakkar"]="sunken temple",
-  ["dire maul"]="dire maul east",
-  ["dire maul (east)"]="dire maul east",
-  ["dire maul (west)"]="dire maul west",
-  ["dire maul (north)"]="dire maul north",
-  ["lower blackrock spire"]="lower blackrock spire",
-  ["upper blackrock spire"]="upper blackrock spire",
- }
- local wanted=aliases[target] or target
- local function matches(key)
-  if key==wanted then return true end
-  if target=="dire maul" then return key=="dire maul east" or key=="dire maul west" or key=="dire maul north" end
-  if target=="lower blackrock spire" then return key=="lower blackrock spire" end
-  if target=="upper blackrock spire" then return key=="upper blackrock spire" end
-  return false
- end
- for _,q in ipairs(self.questData) do
-  local key=tostring(q.dungeon or ""):lower():gsub("’","'"):gsub("%s+"," ")
-  if not dungeonName or matches(key) then out[#out+1]=q end
- end
- return out
+local function NormalizeAreaName(value)
+ return tostring(value or ""):lower():gsub("’","'"):gsub("^the%s+",""):gsub("%s+"," ")
 end
-function A:GetActiveRouteStops()
- if not BindQuestDatabase() then return {},false end
- local stops,seen={},{}
- local function collect(db,id,questTitle,labelText)
+function A:BuildDungeonQuestIndex()
+ if self.dungeonQuestIndexReady then return true end
+ if not BindQuestDatabase() then return false end
+ local ok,ids=pcall(QuestDB.GetAllIds)
+ if not ok or type(ids)~="table" then return false end
+ local areaNames,entityAreas={},{}
+ local index={}
+ local function areasFor(db,id)
+  if not id or not db then return {} end
+  local cacheKey=tostring(db)..":"..tostring(id)
+  if entityAreas[cacheKey] then return entityAreas[cacheKey] end
+  local result={}
   local spawns=SafeGet(db,"spawns",id)
-  if type(spawns)~="table" then return end
-  for areaId,points in pairs(spawns) do
-   if type(points)=="table" then
-    for _,p in ipairs(points) do
-     if type(p)=="table" and tonumber(p[1]) and tonumber(p[2]) then
-      local x,y=tonumber(p[1]),tonumber(p[2])
-      local key=tostring(areaId)..":"..tostring(id)..":"..string.format("%.2f:%.2f",x,y)
-      if not seen[key] then
-       seen[key]=true
-       local zoneName
-       if C_Map and C_Map.GetAreaInfo then local ok,n=pcall(C_Map.GetAreaInfo,areaId); if ok then zoneName=n end end
-       stops[#stops+1]={areaId=tonumber(areaId) or 0,zone=zoneName or ("Area #"..tostring(areaId)),
-        x=x,y=y,quest=questTitle,objective=labelText}
-      end
-     end
+  if type(spawns)=="table" then
+   for areaId in pairs(spawns) do
+    local key=tostring(areaId)
+    local areaName=areaNames[key]
+    if areaName==nil then
+     areaName=""
+     if C_Map and C_Map.GetAreaInfo then local success,name=pcall(C_Map.GetAreaInfo,tonumber(areaId) or areaId); if success and name then areaName=name end end
+     areaNames[key]=areaName
     end
+    if areaName~="" then result[#result+1]={id=tonumber(areaId) or 0,name=areaName} end
+   end
+  end
+  entityAreas[cacheKey]=result
+  return result
+ end
+ for _,qid in ipairs(ids) do
+  local objectives=SafeGet(QuestDB,"objectives",qid) or {}
+  local foundAreas={}
+  local function addAreas(db,entityId)
+   for _,area in ipairs(areasFor(db,entityId)) do foundAreas[tostring(area.id)]=area end
+  end
+  for _,row in ipairs(objectives[1] or {}) do addAreas(NpcDB,row[1]) end
+  for _,row in ipairs(objectives[2] or {}) do addAreas(ObjectDB,row[1]) end
+  for _,row in ipairs(objectives[5] or {}) do addAreas(NpcDB,row[2]) end
+  local zoneSort=tonumber(SafeGet(QuestDB,"zoneOrSort",qid)) or 0
+  if zoneSort>0 then
+   local key=tostring(zoneSort)
+   local areaName=areaNames[key]
+   if areaName==nil then
+    areaName=""
+    if C_Map and C_Map.GetAreaInfo then local success,name=pcall(C_Map.GetAreaInfo,zoneSort); if success and name then areaName=name end end
+    areaNames[key]=areaName
+   end
+   if areaName~="" then foundAreas[key]={id=zoneSort,name=areaName} end
+  end
+  if next(foundAreas) then
+   local starter=SafeGet(QuestDB,"startedBy",qid) or {}
+   local starterId=starter[1] and starter[1][1]
+   local giver=starterId and (SafeGet(NpcDB,"name",starterId) or ("NPC "..starterId)) or "Unknown"
+   local objectiveText=SafeGet(QuestDB,"objectivesText",qid) or {}
+   local objective=type(objectiveText)=="table" and table.concat(objectiveText,"; ") or tostring(objectiveText or "")
+   local prereq=SafeGet(QuestDB,"preQuestSingle",qid) or {}
+   local record={
+    id="questie_"..tostring(qid),questID=qid,name=SafeGet(QuestDB,"name",qid),
+    level=SafeGet(QuestDB,"questLevel",qid) or SafeGet(QuestDB,"requiredLevel",qid),
+    faction=nil,giver=giver,giverLocation=starterId and SpawnSummary(NpcDB,starterId) or nil,
+    objective=objective~="" and objective or nil,
+    prerequisites=#prereq>0 and table.concat(prereq,", ") or nil,
+    source="QuestieDB objective/zone match",areaNames={}
+   }
+   for _,area in pairs(foundAreas) do
+    record.areaNames[#record.areaNames+1]=area.name
+    local areaKey=NormalizeAreaName(area.name)
+    index[areaKey]=index[areaKey] or {}
+    index[areaKey][#index[areaKey]+1]=record
    end
   end
  end
- for _,q in ipairs(self.active or {}) do
-  local data=SafeGet(QuestDB,"objectives",q.id) or {}
-  for _,row in ipairs(data[1] or {}) do collect(NpcDB,row[1],q.title,row[2] or "Creature objective") end
-  for _,row in ipairs(data[2] or {}) do collect(ObjectDB,row[1],q.title,row[2] or "Object objective") end
-  for _,row in ipairs(data[5] or {}) do collect(NpcDB,row[2],q.title,row[3] or "Kill-credit objective") end
+ self.dungeonQuestIndex=index
+ self.dungeonQuestIndexReady=true
+ return true
+end
+function A:GetDungeonQuests(dungeonName)
+ local out,seen={},{}
+ local target=NormalizeAreaName(dungeonName)
+ local function add(q)
+  local key=NormalizeAreaName(q.name).."|"..NormalizeAreaName(q.giver).."|"..tostring(q.questID or q.id or "")
+  if not seen[key] then seen[key]=true; out[#out+1]=q end
  end
- table.sort(stops,function(a,b)
-  if a.areaId~=b.areaId then return a.areaId<b.areaId end
-  if a.x~=b.x then return a.x<b.x end
-  return a.y<b.y
+ local aliases={
+  ["temple of atal'hakkar"]={"sunken temple","temple of atal'hakkar"},
+  ["sunken temple"]={"sunken temple","temple of atal'hakkar"},
+  ["dire maul"]={"dire maul east","dire maul west","dire maul north","dire maul"},
+  ["the stockade"]={"stockade"},
+  ["deadmines"]={"deadmines"},
+ }
+ for _,q in ipairs(self.questData) do
+  local key=NormalizeAreaName(q.dungeon)
+  if not dungeonName or key==target or (target=="dire maul" and key:find("dire maul",1,true)) then add(q) end
+ end
+ if dungeonName and self:BuildDungeonQuestIndex() then
+  local names=aliases[target] or {target}
+  local matches={}
+  for areaName,records in pairs(self.dungeonQuestIndex or {}) do
+   local area=NormalizeAreaName(areaName)
+   local hit=false
+   for _,alias in ipairs(names) do
+    local normalized=NormalizeAreaName(alias)
+    if area==normalized or (normalized~="" and area:find(normalized,1,true)) then hit=true; break end
+   end
+   if hit then for _,q in ipairs(records) do matches[q.questID]=q end end
+  end
+  for _,q in pairs(matches) do
+   local copy={}
+   for k,v in pairs(q) do copy[k]=v end
+   copy.dungeon=dungeonName
+   add(copy)
+  end
+ end
+ table.sort(out,function(a,b)
+  local al,bl=tonumber(a.level) or 0,tonumber(b.level) or 0
+  if al~=bl then return al<bl end
+  return tostring(a.name or "")<tostring(b.name or "")
  end)
- return stops,true
+ return out
 end
 function A:GetDashboardSummary()
  local total=self.databaseCount or #self.questData
